@@ -1,0 +1,6 @@
+#!/bin/bash
+
+
+echo "start importing..............pealse wait "
+nohup $HOME/releases/current/scripts/importProducts2 -importerId 1s -slowImport > $HOME/logs/import-v.log 2>&1 &
+echo " import done"

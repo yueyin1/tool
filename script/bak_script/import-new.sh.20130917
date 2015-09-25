@@ -1,0 +1,85 @@
+#!/bin/bash
+
+read -p "slow import or fast :" Slow
+OldRetailersLine=`wc -l /home/shopstyle/releases/current/data/Retailers.csv`
+echo $OldRetailersLine
+cp /home/shopstyle/releases/current/data/Retailers.csv /home/shopstyle/QA/Retailers.csv
+cp /home/shopstyle/releases/current/data/ShippingCountries.csv /home/shopstyle/QA/
+cp /home/shopstyle/releases/current/data/Brands.csv /home/shopstyle/QA/
+read -p "Retailer Name :" RetailerName
+read -p "Display Name :"  DisplayName
+read -p "Site URL :" SiteURL
+read -p "Locale en_AU or en_GB , en_US , ja_JP , de_DE , en_CA , fr_FR :" Locale
+read -p "Brand Name :" BrandName
+read -p "Retailer Type :" RetailerType
+
+echo "$RetailerName,$DisplayName,,$SiteURL,,$Locale,,$BrandName,true,,$RetailerType" >> /home/shopstyle/QA/Retailers.csv
+grep "# " /home/shopstyle/QA/Retailers.csv > /home/shopstyle/QA/Retailers.csv.tmp
+sort -t: -k 1g /home/shopstyle/QA/Retailers.csv |grep -v "# "|uniq >> /home/shopstyle/QA/Retailers.csv.tmp
+
+NewRetailersLine=`wc -l /home/shopstyle/QA/Retailers.csv.tmp`
+echo $NewRetailersLine
+if [[ -n $BrandName ]] ; then
+echo "$BrandName" >> /home/shopstyle/QA/Brands.csv
+sort -t: -k 1g /home/shopstyle/QA/Brands.csv|uniq  > /home/shopstyle/QA/Brands.csv.tmp
+else
+cp /home/shopstyle/QA/Brands.csv /home/shopstyle/QA/Brands.csv.tmp
+fi
+OIFS=$IFS 
+IFS=',' 
+read -p "Shipping Country :" shippingCountry
+IFS=$OIFS  
+ShippingCountry=($shippingCountry)
+for i in "${ShippingCountry[@]}" ; do
+echo  "$RetailerName,$i" >> /home/shopstyle/QA/ShippingCountries.csv
+done
+sort -t: -k 1g /home/shopstyle/QA/ShippingCountries.csv|uniq >/home/shopstyle/QA/ShippingCountries.csv.tmp
+ls /home/shopstyle/feeds/*/
+read -p "create site directory :" SiteDir
+read -p "please select date ,input date :" date
+export SiteDir
+export date
+export Locale
+if [[ $Slow == "slow" ]] ; then
+read -p " incoming directory eg, 1s or 2s :" NS
+export NS
+
+cp /home/shopstyle/QA/Retailers.csv.tmp /home/shopstyle/releases/current/data/Retailers.csv
+cp /home/shopstyle/QA/Brands.csv.tmp /home/shopstyle/releases/current/data/Brands.csv
+cp /home/shopstyle/QA/ShippingCountries.csv.tmp /home/shopstyle/releases/current/data/ShippingCountries.csv
+
+
+~/releases/current/scripts/loaddb brands
+~/releases/current/scripts/loaddb retailers
+~/releases/current/scripts/loaddb shippingcountries
+
+mkdir -p /home/shopstyle/support/products/incoming-$NS/$SiteDir
+scp -rp /home/shopstyle/feeds/$date/$SiteDir.*  /home/shopstyle/support/products/incoming-$NS/$SiteDir/
+$HOME/releases/current/scripts/webappRunner -stop store1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -stop store1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -stop admin1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -stop admin1
+echo "start importing..............pealse wait "
+$HOME/releases/current/scripts/importProducts2 -importerId $NS -slowImport > $HOME/logs/import-$SiteDir.log 2>&1
+cat $HOME/logs/import-$SiteDir.log >> $HOME/logs/import.log$NS
+echo " import done"
+$HOME/releases/current/scripts/webappRunner -start store1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -start store1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -start admin1
+sleep 5
+$HOME/releases/current/scripts/webappRunner -start admin1
+sleep 5
+~/releases/current/scripts/indexProducts -locale $Locale > $HOME/logs/indexProducts-$SiteDir.log 2>&1
+cat $HOME/logs/indexProducts-$SiteDir.log >>  $HOME/logs/indexProducts.log
+
+echo " ERROR in import log : "
+grep ERROR $HOME/logs/import-$SiteDir.log 
+echo " ERROR in indexProducts log :"
+grep ERROR $HOME/logs/indexProducts-$SiteDir.log
+
+

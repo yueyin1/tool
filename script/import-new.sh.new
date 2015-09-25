@@ -1,0 +1,89 @@
+#!/bin/bash
+
+ls /home/hisoft/feeds/*/
+read -p "create site directory :" SiteDir
+read -p "please select date ,input date :" date
+
+pipei=`grep "<Retailer>" /home/hisoft/feeds/$date/$SiteDir.xml  |uniq|awk -F "<Retailer>"  '{print $2}'|awk -F  "</Retailer>" '{print $1}' `
+grep_Retailers=` grep -i  "$pipei"  /home/shopstyle/releases/current/content/retailers/Retailers.csv `
+
+echo " if [$grep_Retailers] is not null ,please use import old srcipt"
+read -p " go ahead: Enter , stop: Ctrl+c"
+
+
+OldRetailersLine=`wc -l /home/shopstyle/releases/current/content/retailers/Retailers.csv`
+echo $OldRetailersLine
+cp /home/shopstyle/releases/current/content/retailers/Retailers.csv /home/shopstyle/QA/Retailers.csv
+cp /home/shopstyle/releases/current/content/retailers/ShippingCountries.csv /home/shopstyle/QA/
+cp /home/shopstyle/releases/current/content/brands/Brands.csv /home/shopstyle/QA/
+read -p "Retailer Name :" RetailerName
+read -p "Display Name :"  DisplayName
+read -p "Site URL :" SiteURL
+read -p "Locale en_AU or en_GB , en_US , ja_JP , de_DE , en_CA , fr_FR , zh_CN:" Locale
+read -p "Brand Name :" BrandName
+read -p "Retailer Type :" RetailerType
+
+echo "$RetailerName,$DisplayName,,$SiteURL,,$Locale,,$BrandName,true,false,,$RetailerType" >> /home/shopstyle/QA/Retailers.csv
+grep "# " /home/shopstyle/QA/Retailers.csv > /home/shopstyle/QA/Retailers.csv.tmp
+sort -t: -k 1g /home/shopstyle/QA/Retailers.csv |grep -v "# "|uniq >> /home/shopstyle/QA/Retailers.csv.tmp
+
+NewRetailersLine=`wc -l /home/shopstyle/QA/Retailers.csv.tmp`
+echo "make sure $NewRetailersLine and $OldRetailersLine is not same"
+
+
+if [[ -n $BrandName ]] ; then
+
+chk_brand=`grep $BrandName /home/shopstyle/releases/current/content/brands/Brands.csv`
+echo " if [ $chk_brand ] is not null ,please check"
+read -p " go ahead: Enter , stop: Ctrl+c"
+echo "$BrandName" >> /home/shopstyle/QA/Brands.csv
+sort -t: -k 1g /home/shopstyle/QA/Brands.csv|uniq  > /home/shopstyle/QA/Brands.csv.tmp
+
+else
+cp /home/shopstyle/QA/Brands.csv /home/shopstyle/QA/Brands.csv.tmp
+fi
+OIFS=$IFS
+IFS=','
+read -p "Shipping Country :" shippingCountry
+IFS=$OIFS
+ShippingCountry=($shippingCountry)
+for i in "${ShippingCountry[@]}" ; do
+echo  "$RetailerName,$i" >> /home/shopstyle/QA/ShippingCountries.csv
+done
+sort -t: -k 1g /home/shopstyle/QA/ShippingCountries.csv|uniq >/home/shopstyle/QA/ShippingCountries.csv.tmp
+
+
+
+
+export SiteDir
+export date
+export Locale
+
+cp /home/shopstyle/QA/Retailers.csv.tmp /home/shopstyle/releases/current/content/retailers/Retailers.csv
+cp /home/shopstyle/QA/Brands.csv.tmp /home/shopstyle/releases/current/content/brands/Brands.csv
+cp /home/shopstyle/QA/ShippingCountries.csv.tmp /home/shopstyle/releases/current/content/retailers/ShippingCountries.csv
+
+for j in shopstyledevweb21 shopstyledevweb22 shopstyledevweb23;
+do
+scp /home/shopstyle/releases/current/content/retailers/Retailers.csv $j:/home/shopstyle/releases/current/content/retailers/Retailers.csv
+scp /home/shopstyle/releases/current/content/brands/Brands.csv $j:/home/shopstyle/releases/current/content/brands/Brands.csv
+scp /home/shopstyle/releases/current/content/retailers/ShippingCountries.csv $j:/home/shopstyle/releases/current/content/retailers/ShippingCountries.csv
+done
+
+
+for i in shopstyledevweb21 shopstyledevweb22 shopstyledevweb23;
+do
+ssh $i hostname
+ssh $i ps axu|grep import|grep perl |awk '{print $21}'
+done 
+
+
+
+~/releases/current/scripts/loaddb brands
+~/releases/current/scripts/loaddb retailers
+~/releases/current/scripts/loaddb shippingcountries
+
+
+ssh $HOST mkdir -p /home/shopstyle/support/products/incoming-$NS/$SiteDir
+scp -rp /home/hisoft/feeds/$date/$SiteDir.*  $HOST:/home/shopstyle/support/products/incoming-$NS/$SiteDir/
+ssh $HOST nohup  $HOME/releases/current/scripts/importProducts2 -importerId $NS -slowImport > $HOME/logs/import-$SiteDir.log 2>&1  &

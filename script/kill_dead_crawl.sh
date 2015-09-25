@@ -1,0 +1,2 @@
+#!/bin/bash
+for i in shopstyle-prod-crawl02-use1.ec2.shopstyle.com shopstyle-prod-crawl04-use1.ec2.shopstyle.com shopstyle-prod-crawl08-use1.ec2.shopstyle.com shopstyle-prod-crawl10-use1.ec2.shopstyle.com shopstyle-prod-crawl12-use1.ec2.shopstyle.com shopstyle-prod-crawl14-use1.ec2.shopstyle.com shopstyle-prod-crawl16-use1.ec2.shopstyle.com; do ssh $i /home/hisoft/sourcecode/tool/kill_dead_crawl.sh ;done

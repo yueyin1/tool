@@ -1,0 +1,37 @@
+#!/bin/bash
+
+ls /home/hisoft/feeds/*/
+read -p "create site directory :" SiteDir
+read -p "please select date ,input date :" date
+jiequ=`echo ${SiteDir%_*}`
+pipei=`echo ${jiequ//_/*}`
+echo $pipei
+grep_Retailers=`grep -i $pipei /home/shopstyle/releases/current/data/Retailers.csv`
+
+echo " if [$grep_Retailers] is null ,please use import new srcipt"
+read -p " go ahead: Enter , stop: Ctrl+c"
+
+
+export SiteDir
+export date
+
+
+
+
+~/releases/current/scripts/loaddb brands
+~/releases/current/scripts/loaddb retailers
+~/releases/current/scripts/loaddb shippingcountries
+
+mkdir -p /home/shopstyle/support/products/incoming-1s/$SiteDir
+scp -rp /home/hisoft/feeds/$date/$SiteDir.*  /home/shopstyle/support/products/incoming-1s/$SiteDir/
+echo "start importing..............pealse wait "
+nohup $HOME/releases/current/scripts/importProducts2 -importerId 1s -slowImport > $HOME/logs/import-$SiteDir.log 2>&1 &
+cat $HOME/logs/import-$SiteDir.log >> $HOME/logs/import.log
+echo " import done"
+~/releases/current/scripts/indexProducts -locale $Locale > $HOME/logs/indexProducts-$SiteDir.log 2>&1
+cat $HOME/logs/indexProducts-$SiteDir.log >>  $HOME/logs/indexProducts.log
+
+echo " ERROR in import log : "
+grep ERROR $HOME/logs/import-$SiteDir.log 
+echo " ERROR in indexProducts log :"
+grep ERROR $HOME/logs/indexProducts-$SiteDir.log

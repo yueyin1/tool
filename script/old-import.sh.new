@@ -1,0 +1,36 @@
+#!/bin/bash
+
+ls /home/hisoft/feeds/*/
+read -p "create site directory :" SiteDir
+read -p "please select date ,input date :" date
+
+pipei=`grep "<Retailer>" /home/hisoft/feeds/$date/$SiteDir.xml  |uniq|awk -F "<Retailer>"  '{print $2}'|awk -F  "</Retailer>" '{print $1}' `
+grep_Retailers=` grep -i  "$pipei"  /home/shopstyle/releases/current/content/retailers/Retailers.csv `
+
+echo " if [$grep_Retailers] is not null ,please use import old srcipt"
+read -p " go ahead: Enter , stop: Ctrl+c"
+
+for j in shopstyledevweb21 shopstyledevweb22 shopstyledevweb23;
+do
+scp /home/shopstyle/releases/current/content/retailers/Retailers.csv $j:/home/shopstyle/releases/current/content/retailers/Retailers.csv
+scp /home/shopstyle/releases/current/content/brands/Brands.csv $j:/home/shopstyle/releases/current/content/brands/Brands.csv
+scp /home/shopstyle/releases/current/content/retailers/ShippingCountries.csv $j:/home/shopstyle/releases/current/content/retailers/ShippingCountries.csv
+done
+
+
+for i in shopstyledevweb21 shopstyledevweb22 shopstyledevweb23;
+do
+ssh $i hostname
+ssh $i ps axu|grep import|grep perl |awk '{print $21}'
+done 
+
+
+read -p "please select host shopstyledevweb21 , shopstyledevweb22 , shopstyledevweb23 :"  HOST
+read -p "please select number 1s,2s,3s :" NS
+
+~/releases/current/scripts/loaddb 
+
+
+ssh $HOST mkdir -p /home/shopstyle/support/products/incoming-$NS/$SiteDir
+scp -rp /home/hisoft/feeds/$date/$SiteDir.*  $HOST:/home/shopstyle/support/products/incoming-$NS/$SiteDir/
+ssh $HOST nohup  $HOME/releases/current/scripts/importProducts2 -importerId $NS -slowImport > $HOME/logs/import-$SiteDir.log 2>&1  &
